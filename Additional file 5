@@ -1,0 +1,92 @@
+#Network
+ibrary(igraph)              
+nodefile="net.node.txt"     
+edgefile="net.network.txt"  
+outfile="network.pdf"        
+lncRNAcol="#00AFBB"      
+mRNAcol="#FC4E07"             
+setwd("D:\\biowolf\\GILnc\\18.network")     
+options(stringsAsFactors=F)
+node.data=read.table(nodefile, header=T, sep="\t", check.names=F)
+edge.data=read.table(edgefile, header=T, sep="\t", check.names=F)
+color=ifelse(node.data$Type=="lncRNA", lncRNAcol, mRNAcol)
+value=ifelse(node.data$Type=="lncRNA", 7, 4)
+node=data.frame(id=node.data$Node,label=node.data$Node,color=color,shape="dot",value=value)
+edge=data.frame(from=edge.data$lncRNA,to=edge.data$mRNA,length=100,arrows="middle",smooth=TRUE,shadow=FALSE,weight=edge.data$cor)
+d=data.frame(p1=edge$from,p2=edge$to,weight=abs(edge$weight))
+g=graph.data.frame(d,directed = FALSE)
+E(g)$color="grey30"
+V(g)$size=node$value[match(names(components(g)$membership),node$label)]
+V(g)$shape="sphere"
+V(g)$lable.cex=0
+V(g)$color=node$color[match(names(components(g)$membership),node$label)]
+pdf(outfile,width=10,height=9)
+layout(mat=matrix(c(1,2,1,2),nc=2), height=c(1,7))
+par(mar=c(0,5,3,5))
+plot(1,type="n",axes=F,xlab="",ylab="")
+legend('center',legend=c('lncRNA','mRNA'),col=c(lncRNAcol,mRNAcol),pch=16,bty="n",ncol=2,cex=3)
+vertex.frame.color = node$color
+edge_col=E(g)$color
+plot(g,layout=layout_with_graphopt,vertex.size=V(g)$size,vertex.label=NA,vertex.label.cex=V(g)$lable.cex,edge.width = 0.1,edge.arrow.size=0,vertex.label.color=NULL,vertex.frame.color=NA,edge.color=edge_col,vertex.label.font=2)
+dev.off()
+
+#GO
+library("clusterProfiler")
+library("org.Hs.eg.db")
+library("enrichplot")
+library("ggplot2")
+pvalueFilter=0.05      
+qvalueFilter=0.05       
+colorSel="qvalue"
+if(qvalueFilter>0.05){
+	colorSel="pvalue"
+}
+setwd("————")           
+rt=read.table("net.network.txt", header=T, sep="\t", check.names=F)    
+genes=unique(as.vector(rt[,2]))
+entrezIDs=mget(genes, org.Hs.egSYMBOL2EG, ifnotfound=NA)
+entrezIDs=as.character(entrezIDs)
+gene=entrezIDs[entrezIDs!="NA"]        
+kk=enrichGO(gene=gene, OrgDb=org.Hs.eg.db, pvalueCutoff=1, qvalueCutoff=1, ont="all", readable=T)
+GO=as.data.frame(kk)
+GO=GO[(GO$pvalue<pvalueFilter & GO$qvalue<qvalueFilter),]
+write.table(GO, file="GO.txt", sep="\t", quote=F, row.names = F)
+showNum=10
+if(nrow(GO)<30){
+	showNum=nrow(GO)
+}
+pdf(file="barplot.pdf", width=9, height=7)
+bar=barplot(kk, drop=TRUE, showCategory=showNum, split="ONTOLOGY", color=colorSel) + facet_grid(ONTOLOGY~., scale='free')
+print(bar)
+dev.off()
+
+#KEGG
+library("clusterProfiler")
+library("org.Hs.eg.db")
+library("enrichplot")
+library("ggplot2")
+pvalueFilter=0.05          
+qvalueFilter=0.05           
+colorSel="qvalue"
+if(qvalueFilter>0.05){
+	colorSel="pvalue"
+}	
+setwd("D:\\biowolf\\GILnc\\20.KEGG")            
+rt=read.table("net.network.txt", header=T, sep="\t", check.names=F)     
+genes=unique(as.vector(rt[,2]))
+entrezIDs=mget(genes, org.Hs.egSYMBOL2EG, ifnotfound=NA)
+entrezIDs=as.character(entrezIDs)
+rt=data.frame(genes, entrezID=entrezIDs)
+gene=entrezIDs[entrezIDs!="NA"]       
+kk <- enrichKEGG(gene=gene, organism="hsa", pvalueCutoff=1, qvalueCutoff=1)
+KEGG=as.data.frame(kk)
+KEGG$geneID=as.character(sapply(KEGG$geneID,function(x)paste(rt$genes[match(strsplit(x,"/")[[1]],as.character(rt$entrezID))],collapse="/")))
+KEGG=KEGG[(KEGG$pvalue<pvalueFilter & KEGG$qvalue<qvalueFilter),]
+write.table(KEGG, file="KEGG.txt", sep="\t", quote=F, row.names = F)
+showNum=30
+if(nrow(KEGG)<showNum){
+	showNum=nrow(KEGG)
+}
+pdf(file="barplot.pdf", width=9, height=7)
+barplot(kk, drop=TRUE, showCategory=showNum, color=colorSel)
+dev.off()
